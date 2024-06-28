@@ -1,68 +1,43 @@
 import type {StatsChunk, StatsCompilation} from 'webpack';
 import graphviz from 'graphviz';
+import {
+  ChunkFilterOptions,
+  OutputOptions,
+  createChunkFilter,
+  getChunkKey,
+} from './util';
 
-export type Graph = {
-  nodes: Map<string, StatsChunk>;
+export type ChunkGraph = {
+  chunks: Map<string, StatsChunk>;
   edges: Map<string, Map<string, number>>;
 };
 
 export type BuildChunkGraphOptions = {
   statsData: StatsCompilation;
-  filter?: {chunkId?: string; filename?: string};
+  filter?: ChunkFilterOptions;
 };
-
-export type OutputOptions = {
-  path?: string;
-  format?: string;
-};
-
-export function isStatsData(statsData: object): statsData is StatsCompilation {
-  return (statsData as StatsCompilation).chunks !== undefined;
-}
-
-function createNodeFilter(filter: BuildChunkGraphOptions['filter']) {
-  return (chunk: StatsChunk) => {
-    if (filter?.chunkId) {
-      if (String(chunk.id) !== filter.chunkId) {
-        return false;
-      }
-    }
-
-    if (filter?.filename) {
-      const filename = filter.filename;
-      if (!chunk.files) {
-        return false;
-      }
-      if (!chunk.files.some((file) => file.toLowerCase().includes(filename))) {
-        return false;
-      }
-    }
-
-    return true;
-  };
-}
 
 export function buildChunkGraph({
   statsData,
   filter,
-}: BuildChunkGraphOptions): Graph {
+}: BuildChunkGraphOptions): ChunkGraph {
   if (!statsData.chunks) {
     throw new Error('No chunks found');
   }
 
   // allow filtering to a subgraph containing particular nodes
-  let nodeFilter = createNodeFilter(filter);
+  let chunkFilter = createChunkFilter(filter);
 
   const allNodes = new Map<string, StatsChunk>();
 
-  const nodes: Map<string, StatsChunk> = new Map();
+  const chunks: Map<string, StatsChunk> = new Map();
   const edges: Map<string, Map<string, number>> = new Map();
   function addEdge(a: StatsChunk, b: StatsChunk) {
-    const keyA = String(a.id);
-    const keyB = String(b.id);
+    const keyA = getChunkKey(a);
+    const keyB = getChunkKey(b);
 
-    nodes.set(keyA, a);
-    nodes.set(keyB, b);
+    chunks.set(keyA, a);
+    chunks.set(keyB, b);
 
     let aEdges = edges.get(keyA);
     if (aEdges === undefined) {
@@ -81,7 +56,7 @@ export function buildChunkGraph({
     if (!chunk.id) {
       throw new Error('Chunk has no ID');
     }
-    allNodes.set(String(chunk.id), chunk);
+    allNodes.set(getChunkKey(chunk), chunk);
   }
 
   // collect (filtered) edges and any involved nodes
@@ -97,13 +72,13 @@ export function buildChunkGraph({
       if (!parentChunk) {
         throw new Error('internal error: Parent chunk not found');
       }
-      if (nodeFilter(parentChunk) || nodeFilter(chunk)) {
+      if (chunkFilter(parentChunk) || chunkFilter(chunk)) {
         addEdge(parentChunk, chunk);
       }
     }
   }
 
-  return {nodes, edges};
+  return {chunks, edges};
 }
 
 export function graphChunks(
@@ -113,12 +88,12 @@ export function graphChunks(
   const graph = buildChunkGraph(graphOptions);
 
   const g = graphviz.digraph('G');
-  g.set('layout', 'fdp');
+  g.set('layout', 'dot');
 
-  for (const node of graph.nodes.values()) {
-    g.addNode(String(node.id), {
+  for (const chunk of graph.chunks.values()) {
+    g.addNode(getChunkKey(chunk), {
       shape: 'box',
-      label: node.names?.join(' ') ?? String(node.id),
+      label: chunk.names?.join(' ') ?? String(chunk.id),
     });
   }
   for (const [keyA, mapB] of graph.edges.entries()) {
@@ -127,5 +102,7 @@ export function graphChunks(
     }
   }
 
-  g.output(format, path ?? `./graph.${format}`);
+  path ??= `./graph.${format}`;
+  console.log('Writing graph to', path);
+  g.output(format, path);
 }
