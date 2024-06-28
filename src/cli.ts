@@ -4,12 +4,14 @@ import {graphChunks, isStatsData} from './graph';
 import arg from 'arg';
 
 const helpString = `
-Usage: pnpm graph path/to/stats.json [--chunkId id] [--filename name]
+Usage: pnpm graph path/to/stats.json
 
 Options:
-  --help, -h           Show this message
-  --chunkId, -c  id    Filter to a specific chunk ID
-  --filename, -f name  Filter to chunks including a specific (partial) filename
+  --help, -h            Show this message
+  --chunkId, -c  id     Filter to a specific chunk ID
+  --filename, -f name   Filter to chunks including a specific (partial) filename
+  --format, -F   format Output format for the graph file (e.g. 'png', 'svg')
+  --output, -o   path   Output path for the graph file
 `;
 
 function main() {
@@ -18,9 +20,13 @@ function main() {
       '--help': Boolean,
       '--chunkId': String,
       '--filename': String,
+      '--format': String,
+      '--output': String,
       '-h': '--help',
       '-c': '--chunkId',
       '-f': '--filename',
+      '-F': '--format',
+      '-o': '--output',
     });
 
     if (args['--help']) {
@@ -45,7 +51,12 @@ function main() {
       filename: args['--filename'],
     };
 
-    graphChunks({statsData, filter});
+    const outputOptions = {
+      format: args['--format'],
+      path: args['--output'],
+    };
+
+    graphChunks({statsData, filter}, outputOptions);
   } catch (e) {
     console.error('Failed to generate graph:');
     console.error(e);

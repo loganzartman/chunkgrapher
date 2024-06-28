@@ -1,4 +1,5 @@
 import type {StatsChunk, StatsCompilation} from 'webpack';
+import graphviz from 'graphviz';
 
 export type Graph = {
   nodes: Map<string, StatsChunk>;
@@ -8,6 +9,11 @@ export type Graph = {
 export type BuildChunkGraphOptions = {
   statsData: StatsCompilation;
   filter?: {chunkId?: string; filename?: string};
+};
+
+export type OutputOptions = {
+  path?: string;
+  format?: string;
 };
 
 export function isStatsData(statsData: object): statsData is StatsCompilation {
@@ -71,22 +77,22 @@ export function buildChunkGraph({
   }
 
   // collect all nodes for ID -> node lookup
-  statsData.chunks.forEach((chunk) => {
+  for (const chunk of statsData.chunks) {
     if (!chunk.id) {
       throw new Error('Chunk has no ID');
     }
     allNodes.set(String(chunk.id), chunk);
-  });
+  }
 
   // collect (filtered) edges and any involved nodes
-  statsData.chunks.forEach((chunk) => {
+  for (const chunk of statsData.chunks) {
     if (!chunk.id) {
       throw new Error('Chunk has no ID');
     }
     if (!chunk.parents) {
       throw new Error('Chunk has no parents');
     }
-    chunk.parents.forEach((parent) => {
+    for (const parent of chunk.parents) {
       const parentChunk = allNodes.get(String(parent));
       if (!parentChunk) {
         throw new Error('internal error: Parent chunk not found');
@@ -94,14 +100,32 @@ export function buildChunkGraph({
       if (nodeFilter(parentChunk) || nodeFilter(chunk)) {
         addEdge(parentChunk, chunk);
       }
-    });
-  });
+    }
+  }
 
   return {nodes, edges};
 }
 
-export function graphChunks(options: BuildChunkGraphOptions) {
-  // reference: https://webpack.js.org/api/stats/
-  const graph = buildChunkGraph(options);
-  console.log(graph);
+export function graphChunks(
+  graphOptions: BuildChunkGraphOptions,
+  {path, format = 'svg'}: OutputOptions,
+) {
+  const graph = buildChunkGraph(graphOptions);
+
+  const g = graphviz.digraph('G');
+  g.set('layout', 'fdp');
+
+  for (const node of graph.nodes.values()) {
+    g.addNode(String(node.id), {
+      shape: 'box',
+      label: node.names?.join(' ') ?? String(node.id),
+    });
+  }
+  for (const [keyA, mapB] of graph.edges.entries()) {
+    for (const [keyB, value] of mapB.entries()) {
+      g.addEdge(keyA, keyB, {label: String(value)});
+    }
+  }
+
+  g.output(format, path ?? `./graph.${format}`);
 }
