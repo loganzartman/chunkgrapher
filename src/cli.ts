@@ -7,8 +7,9 @@ const helpString = `
 Usage: pnpm graph path/to/stats.json [--chunkId id] [--filename name]
 
 Options:
-  --chunkId id    Filter to a specific chunk ID
-  --filename name Filter to chunks including a specific filename
+  --help, -h           Show this message
+  --chunkId, -c  id    Filter to a specific chunk ID
+  --filename, -f name  Filter to chunks including a specific (partial) filename
 `;
 
 function main() {
@@ -17,6 +18,7 @@ function main() {
       '--help': Boolean,
       '--chunkId': String,
       '--filename': String,
+      '-h': '--help',
       '-c': '--chunkId',
       '-f': '--filename',
     });
