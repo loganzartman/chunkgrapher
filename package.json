@@ -15,6 +15,7 @@
     "@types/graphviz": "^0.0.39",
     "@types/node": "^20.14.9",
     "@types/webpack": "^5.28.5",
+    "prettier": "^3.3.2",
     "ts-node": "^10.9.2"
   },
   "dependencies": {
