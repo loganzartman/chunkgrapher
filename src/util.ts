@@ -18,6 +18,10 @@ export function isStatsData(statsData: object): statsData is StatsCompilation {
   return (statsData as StatsCompilation).chunks !== undefined;
 }
 
+export function getAssetKey(asset: {name: string}) {
+  return asset.name;
+}
+
 export function getChunkKey(chunk: {id?: string | number}) {
   if (chunk.id !== undefined) {
     return String(chunk.id);

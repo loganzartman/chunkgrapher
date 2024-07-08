@@ -1,15 +1,18 @@
-import type {StatsChunk, StatsCompilation} from 'webpack';
+import type {StatsAsset, StatsChunk, StatsCompilation} from 'webpack';
 import graphviz from 'graphviz';
 import {
   ChunkFilterOptions,
   OutputOptions,
   createChunkFilter,
+  getAssetKey,
   getChunkKey,
 } from './util';
 
 export type ChunkGraph = {
+  assets: Map<string, StatsAsset>;
   chunks: Map<string, StatsChunk>;
-  edges: Map<string, Map<string, number>>;
+  chunkAssets: Map<string, Set<string>>;
+  chunkEdges: Map<string, Set<string>>;
 };
 
 export type BuildChunkGraphOptions = {
@@ -21,6 +24,9 @@ export function buildChunkGraph({
   statsData,
   filter,
 }: BuildChunkGraphOptions): ChunkGraph {
+  if (!statsData.assets) {
+    throw new Error('No assets found');
+  }
   if (!statsData.chunks) {
     throw new Error('No chunks found');
   }
@@ -28,57 +34,49 @@ export function buildChunkGraph({
   // allow filtering to a subgraph containing particular nodes
   let chunkFilter = createChunkFilter(filter);
 
-  const allNodes = new Map<string, StatsChunk>();
+  const assets = new Map<string, StatsAsset>();
+  const chunks = new Map<string, StatsChunk>();
+  const chunkAssets = new Map<string, Set<string>>();
+  const chunkEdges = new Map<string, Set<string>>();
 
-  const chunks: Map<string, StatsChunk> = new Map();
-  const edges: Map<string, Map<string, number>> = new Map();
-  function addEdge(a: StatsChunk, b: StatsChunk) {
-    const keyA = getChunkKey(a);
-    const keyB = getChunkKey(b);
-
-    chunks.set(keyA, a);
-    chunks.set(keyB, b);
-
-    let aEdges = edges.get(keyA);
-    if (aEdges === undefined) {
-      aEdges = new Map();
-      edges.set(keyA, aEdges);
-    }
-    let bCount = aEdges.get(keyB);
-    if (bCount === undefined) {
-      bCount = 0;
-    }
-    aEdges.set(keyB, bCount + 1);
+  // collect all assets for lookup by name
+  const allAssets = new Map<string, StatsAsset>();
+  for (const asset of statsData.assets) {
+    allAssets.set(getAssetKey(asset), asset);
   }
 
-  // collect all nodes for ID -> node lookup
+  // collect all chunks for lookup by ID
+  const allChunks = new Map<string, StatsChunk>();
   for (const chunk of statsData.chunks) {
-    if (!chunk.id) {
-      throw new Error('Chunk has no ID');
-    }
-    allNodes.set(getChunkKey(chunk), chunk);
+    allChunks.set(getChunkKey(chunk), chunk);
   }
 
-  // collect (filtered) edges and any involved nodes
   for (const chunk of statsData.chunks) {
-    if (!chunk.id) {
-      throw new Error('Chunk has no ID');
+    if (!chunkFilter(chunk)) {
+      continue;
     }
-    if (!chunk.parents) {
-      throw new Error('Chunk has no parents');
-    }
-    for (const parent of chunk.parents) {
-      const parentChunk = allNodes.get(String(parent));
-      if (!parentChunk) {
-        throw new Error('internal error: Parent chunk not found');
-      }
-      if (chunkFilter(parentChunk) || chunkFilter(chunk)) {
-        addEdge(parentChunk, chunk);
+
+    const chunkKey = getChunkKey(chunk);
+    chunks.set(chunkKey, chunk);
+
+    if (chunk.files) {
+      for (const filename of chunk.files) {
+        const assetKey = filename;
+        const asset = allAssets.get(assetKey);
+        if (asset) {
+          assets.set(assetKey, asset);
+          let assetsSet = chunkAssets.get(chunkKey);
+          if (!assetsSet) {
+            assetsSet = new Set();
+            chunkAssets.set(chunkKey, assetsSet);
+          }
+          assetsSet.add(assetKey);
+        }
       }
     }
   }
 
-  return {chunks, edges};
+  return {assets, chunks, chunkAssets, chunkEdges};
 }
 
 export function graphChunks(
@@ -86,19 +84,23 @@ export function graphChunks(
   {path, format = 'svg'}: OutputOptions,
 ) {
   const graph = buildChunkGraph(graphOptions);
+  console.log(graph);
 
   const g = graphviz.digraph('G');
-  g.set('layout', 'dot');
+  g.set('layout', 'fdp');
 
   for (const chunk of graph.chunks.values()) {
-    g.addNode(getChunkKey(chunk), {
-      shape: 'box',
-      label: chunk.names?.join(' ') ?? String(chunk.id),
-    });
-  }
-  for (const [keyA, mapB] of graph.edges.entries()) {
-    for (const [keyB, value] of mapB.entries()) {
-      g.addEdge(keyA, keyB, {label: String(value)});
+    const c = g.addCluster('cluster_' + getChunkKey(chunk));
+    c.set('label', chunk.names?.join(', ') ?? getChunkKey(chunk));
+
+    const assets = graph.chunkAssets.get(getChunkKey(chunk));
+    if (assets) {
+      for (const assetKey of assets) {
+        const asset = graph.assets.get(assetKey);
+        if (asset) {
+          c.addNode(getAssetKey(asset), {label: asset.name});
+        }
+      }
     }
   }
 

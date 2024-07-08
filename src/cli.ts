@@ -4,7 +4,7 @@ import {createChunkFilter, isStatsData} from './util';
 import arg from 'arg';
 import dedent from 'dedent';
 import {graphChunks} from './graphChunks';
-import {graphModules} from './graphModules';
+import {graphModules} from './graphRelatives';
 
 function mainChunks(argv: string[]) {
   const args = arg(
@@ -118,18 +118,14 @@ function mainModules(argv: string[]) {
     throw new Error('Invalid stats data');
   }
 
-  const filter = {
-    chunkId: args['--chunkId'],
-    chunkFilename: args['--chunkFilename'],
-    moduleName: args['--moduleName'],
-  };
-
-  const outputOptions = {
+  graphModules({
+    statsData,
+    filter: {
+      moduleName: args['--moduleName'],
+    },
     format: args['--format'],
     path: args['--output'],
-  };
-
-  graphModules({statsData, filter}, outputOptions);
+  });
 }
 
 function main() {
