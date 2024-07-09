@@ -76,3 +76,9 @@ export function createModuleFilter(filter?: ModuleFilterOptions) {
     return true;
   };
 }
+
+export function addEdge(edges: Map<string, Set<string>>, a: string, b: string) {
+  const aEdges = edges.get(a) ?? new Set<string>();
+  edges.set(a, aEdges);
+  aEdges.add(b);
+}

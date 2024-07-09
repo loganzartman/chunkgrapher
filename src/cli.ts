@@ -1,10 +1,10 @@
 import fs from 'fs';
 import process from 'process';
-import {createChunkFilter, isStatsData} from './util';
+import {isStatsData} from './util';
 import arg from 'arg';
 import dedent from 'dedent';
 import {graphChunks} from './graphChunks';
-import {graphModules} from './graphRelatives';
+import {graphModules} from './graphModules';
 
 function mainChunks(argv: string[]) {
   const args = arg(

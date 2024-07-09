@@ -1,69 +1,14 @@
-import type {StatsCompilation, StatsChunk, StatsModule} from 'webpack';
+import type {StatsCompilation, StatsModule} from 'webpack';
 import graphviz from 'graphviz';
 import {
-  ChunkFilterOptions,
   ModuleFilterOptions,
   OutputOptions,
-  createChunkFilter,
+  addEdge,
   createModuleFilter,
-  getChunkKey,
   getModuleKey,
 } from './util';
-
-export type ModuleGraph = {
-  modules: Map<string, StatsModule>;
-  moduleChildren: Map<string, Set<string>>;
-  moduleParents: Map<string, Set<string>>;
-};
-
-function addEdge(edges: Map<string, Set<string>>, a: string, b: string) {
-  const aEdges = edges.get(a) ?? new Set<string>();
-  edges.set(b, aEdges);
-  aEdges.add(b);
-}
-
-export function buildModuleGraph(statsData: StatsCompilation): ModuleGraph {
-  if (!statsData.modules) {
-    throw new Error('No modules found');
-  }
-
-  const modules = new Map<string, StatsModule>();
-  for (const mod of statsData.modules) {
-    modules.set(getModuleKey(mod), mod);
-  }
-  const moduleParents = new Map<string, Set<string>>();
-  const moduleChildren = new Map<string, Set<string>>();
-
-  function addParents(m: StatsModule, visited = new Set<string>()) {
-    if (!m.reasons) throw new Error('Module has no reasons');
-    const mKey = getModuleKey(m);
-
-    for (const parent of m.reasons) {
-      const parentKey = getModuleKey({
-        id: parent.moduleId,
-        identifier: parent.moduleIdentifier,
-      });
-      if (visited.has(parentKey)) {
-        continue;
-      }
-      visited.add(parentKey);
-
-      const parentModule = modules.get(parentKey);
-      if (parentModule) {
-        addEdge(moduleParents, parentKey, mKey);
-        addEdge(moduleChildren, mKey, parentKey);
-        addParents(parentModule, visited);
-      }
-    }
-  }
-
-  const parentsVisited = new Set<string>();
-  for (const mod of statsData.modules) {
-    addParents(mod, parentsVisited);
-  }
-
-  return {modules, moduleChildren, moduleParents};
-}
+import {ModuleGraph, buildModuleGraph} from './buildModuleGraph';
+import {computeSubgraphMetrics} from './computeSubgraphMetrics';
 
 function filterModuleGraph({
   graph,
@@ -89,6 +34,7 @@ function filterModuleGraph({
       return;
     }
     visited.add(moduleKey);
+    filteredModules.set(moduleKey, graph.modules.get(moduleKey)!);
 
     const parents = graph.moduleParents.get(moduleKey);
     if (parents) {
@@ -105,6 +51,7 @@ function filterModuleGraph({
       return;
     }
     visited.add(moduleKey);
+    filteredModules.set(moduleKey, graph.modules.get(moduleKey)!);
 
     const children = graph.moduleChildren.get(moduleKey);
     if (children) {
@@ -146,34 +93,52 @@ export function graphModules({
   statsData: StatsCompilation;
   filter?: ModuleFilterOptions;
 } & OutputOptions) {
-  const rawGraph = buildModuleGraph({statsData});
+  console.debug('Building module graph...');
+  const rawGraph = buildModuleGraph(statsData);
+  console.debug('Filtering module graph...');
   const graph = filterModuleGraph({
     graph: rawGraph,
     direction: 'parents',
     filter,
   });
+  console.debug('Computing subgraph metrics...');
+  const subgraphMetrics = computeSubgraphMetrics(graph);
 
+  console.debug('Rendering graph...');
   const g = graphviz.digraph('G');
   g.set('layout', 'dot');
   g.set('ranksep', '2.0');
+  // set the layout for a large directed graph
 
   const moduleFilter = createModuleFilter(filter);
 
-  for (const mod of graph.modules.values()) {
-    g.addNode(getModuleKey(mod), {
+  for (const [modKey, mod] of graph.modules) {
+    const labelRows = [
+      mod.name,
+      `Own Size: ${subgraphMetrics.ownSize.get(modKey)?.toLocaleString()}`,
+      `Subgraph Size: ${subgraphMetrics.subgraphSize.get(modKey)?.toLocaleString()}`,
+    ];
+
+    g.addNode(modKey, {
       shape: 'box',
-      label: mod.name,
+      label: labelRows.join('\n'),
       fillcolor: moduleFilter(mod) ? 'yellow' : undefined,
       style: 'filled',
     });
   }
 
-  for (const [a, edges] of graph.moduleChildren.entries()) {
-    for (const b of edges.values()) {
-      const moduleA = graph.modules.get(a);
-      const moduleB = graph.modules.get(b);
-      if (!moduleA) throw new Error(`Module not found: ${a}`);
-      if (!moduleB) throw new Error(`Module not found: ${b}`);
+  for (const [aKey, edges] of graph.moduleChildren.entries()) {
+    for (const bKey of edges.values()) {
+      const moduleA = graph.modules.get(aKey);
+      const moduleB = graph.modules.get(bKey);
+      if (!moduleA) {
+        console.warn(`Module not found: ${aKey}`);
+        continue;
+      }
+      if (!moduleB) {
+        console.warn(`Module not found: ${bKey}`);
+        continue;
+      }
       g.addEdge(getModuleKey(moduleA), getModuleKey(moduleB));
     }
   }
