@@ -1,3 +1,5 @@
 node_modules
 graph.svg
 graph.png
+.parcel-cache
+dist

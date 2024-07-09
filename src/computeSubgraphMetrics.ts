@@ -33,16 +33,24 @@ export function computeSubgraphMetrics(graph: ModuleGraph): SubgraphMetrics {
     return nodes;
   }
 
-  for (const [nodeKey, node] of graph.modules) {
-    let size = node.size ?? 0;
+  for (const [nodeKey, node] of graph.nodes) {
+    if (node.type !== 'module') {
+      continue;
+    }
+
+    let size = node.stats.size ?? 0;
     ownSize.set(nodeKey, size);
 
     for (const subnodeKey of getSubgraphNodes(nodeKey, new Set())) {
-      const subnode = graph.modules.get(subnodeKey);
+      const subnode = graph.nodes.get(subnodeKey);
       if (subnode === undefined) {
         throw new Error('Node not found');
       }
-      size += subnode.size ?? 0;
+      if (subnode.type !== 'module') {
+        continue;
+      }
+
+      size += subnode.stats.size ?? 0;
     }
     subgraphSize.set(nodeKey, size);
   }

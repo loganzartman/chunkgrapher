@@ -1,88 +1,14 @@
-import type {StatsCompilation, StatsModule} from 'webpack';
+import type {StatsCompilation} from 'webpack';
 import graphviz from 'graphviz';
 import {
   ModuleFilterOptions,
   OutputOptions,
-  addEdge,
   createModuleFilter,
   getModuleKey,
 } from './util';
-import {ModuleGraph, buildModuleGraph} from './buildModuleGraph';
+import {buildModuleGraph} from './buildModuleGraph';
 import {computeSubgraphMetrics} from './computeSubgraphMetrics';
-
-function filterModuleGraph({
-  graph,
-  direction,
-  filter,
-}: {
-  graph: ModuleGraph;
-  direction: 'parents' | 'children';
-  filter?: ModuleFilterOptions;
-}): ModuleGraph {
-  if (!filter) {
-    return graph;
-  }
-
-  const moduleFilter = createModuleFilter(filter);
-
-  const filteredModules = new Map<string, StatsModule>();
-  const filteredModuleChildren = new Map<string, Set<string>>();
-  const filteredModuleParents = new Map<string, Set<string>>();
-
-  function addParents(moduleKey: string, visited: Set<string>) {
-    if (visited.has(moduleKey)) {
-      return;
-    }
-    visited.add(moduleKey);
-    filteredModules.set(moduleKey, graph.modules.get(moduleKey)!);
-
-    const parents = graph.moduleParents.get(moduleKey);
-    if (parents) {
-      for (const parentKey of parents) {
-        addParents(parentKey, visited);
-        addEdge(filteredModuleParents, moduleKey, parentKey);
-        addEdge(filteredModuleChildren, parentKey, moduleKey);
-      }
-    }
-  }
-
-  function addChildren(moduleKey: string, visited: Set<string>) {
-    if (visited.has(moduleKey)) {
-      return;
-    }
-    visited.add(moduleKey);
-    filteredModules.set(moduleKey, graph.modules.get(moduleKey)!);
-
-    const children = graph.moduleChildren.get(moduleKey);
-    if (children) {
-      for (const childKey of children) {
-        addChildren(childKey, visited);
-        addEdge(filteredModuleChildren, moduleKey, childKey);
-        addEdge(filteredModuleParents, childKey, moduleKey);
-      }
-    }
-  }
-
-  for (const mod of graph.modules.values()) {
-    if (!moduleFilter(mod)) {
-      continue;
-    }
-
-    const moduleKey = getModuleKey(mod);
-
-    if (direction === 'parents') {
-      addParents(moduleKey, new Set());
-    } else {
-      addChildren(moduleKey, new Set());
-    }
-  }
-
-  return {
-    modules: filteredModules,
-    moduleChildren: filteredModuleChildren,
-    moduleParents: filteredModuleParents,
-  };
-}
+import {filterModuleGraph} from './filterModuleGraph';
 
 export function graphModules({
   statsData,
@@ -112,25 +38,29 @@ export function graphModules({
 
   const moduleFilter = createModuleFilter(filter);
 
-  for (const [modKey, mod] of graph.modules) {
+  for (const [nodeKey, node] of graph.nodes) {
+    if (node.type !== 'module') {
+      continue;
+    }
+
     const labelRows = [
-      mod.name,
-      `Own Size: ${subgraphMetrics.ownSize.get(modKey)?.toLocaleString()}`,
-      `Subgraph Size: ${subgraphMetrics.subgraphSize.get(modKey)?.toLocaleString()}`,
+      node.stats.name,
+      `Own Size: ${subgraphMetrics.ownSize.get(nodeKey)?.toLocaleString()}`,
+      `Subgraph Size: ${subgraphMetrics.subgraphSize.get(nodeKey)?.toLocaleString()}`,
     ];
 
-    g.addNode(modKey, {
+    g.addNode(nodeKey, {
       shape: 'box',
       label: labelRows.join('\n'),
-      fillcolor: moduleFilter(mod) ? 'yellow' : undefined,
+      fillcolor: moduleFilter(node) ? 'yellow' : undefined,
       style: 'filled',
     });
   }
 
   for (const [aKey, edges] of graph.moduleChildren.entries()) {
     for (const bKey of edges.values()) {
-      const moduleA = graph.modules.get(aKey);
-      const moduleB = graph.modules.get(bKey);
+      const moduleA = graph.nodes.get(aKey);
+      const moduleB = graph.nodes.get(bKey);
       if (!moduleA) {
         console.warn(`Module not found: ${aKey}`);
         continue;
@@ -139,7 +69,10 @@ export function graphModules({
         console.warn(`Module not found: ${bKey}`);
         continue;
       }
-      g.addEdge(getModuleKey(moduleA), getModuleKey(moduleB));
+      if (moduleA.type !== 'module' || moduleB.type !== 'module') {
+        continue;
+      }
+      g.addEdge(getModuleKey(moduleA.stats), getModuleKey(moduleB.stats));
     }
   }
 

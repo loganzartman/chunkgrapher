@@ -29,14 +29,28 @@ export function getChunkKey(chunk: {id?: string | number}) {
   throw new Error('Chunk has no ID');
 }
 
-export function getModuleKey(mod: {id?: string | number; identifier?: string}) {
-  if (mod.id !== undefined) {
-    return String(mod.id);
+export function getModuleKey(mod: {identifier?: string}) {
+  if (typeof mod.identifier !== 'string') {
+    console.error(mod);
+    throw new Error('Module has no identifier');
   }
-  if (mod.identifier !== undefined) {
-    return mod.identifier;
+  return `module:${mod.identifier}`;
+}
+
+export function getEntryKey(entry: {name?: string}) {
+  if (!entry.name) {
+    console.error(entry);
+    throw new Error('Entry has no name');
   }
-  throw new Error('Module has no ID or identifier');
+  return `entry:${entry.name}`;
+}
+
+export function formatModuleName(mod: StatsModule): string {
+  const name = mod.name ?? mod.identifier;
+  if (name === undefined) {
+    return '<unnamed>';
+  }
+  return name.replace(/^.*!/, '');
 }
 
 export function createChunkFilter(filter?: ChunkFilterOptions) {

@@ -2,9 +2,11 @@
   "name": "chunkgrapher",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "source": "src/index.html",
   "scripts": {
     "graph": "ts-node src/cli.ts",
+    "start": "parcel",
+    "build": "parcel build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,12 +17,21 @@
     "@types/graphviz": "^0.0.39",
     "@types/node": "^20.14.9",
     "@types/webpack": "^5.28.5",
+    "events": "^3.1.0",
+    "parcel": "^2.12.0",
+    "postcss": "^8.4.39",
     "prettier": "^3.3.2",
+    "tailwindcss": "^3.4.4",
     "ts-node": "^10.9.2"
   },
   "dependencies": {
     "arg": "^5.0.2",
     "dedent": "^1.5.3",
-    "graphviz": "^0.0.9"
+    "graphology": "^0.25.4",
+    "graphology-layout": "^0.6.1",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "graphology-layout-noverlap": "^0.4.2",
+    "graphviz": "^0.0.9",
+    "sigma": "3.0.0-beta.24"
   }
 }
