@@ -6,16 +6,7 @@
     <link rel="stylesheet" href="./index.css" />
   </head>
   <body>
-    <script type="module" src="./index.ts"></script>
-    <main class="flex flex-col h-full">
-      <div class="flex flex-col bg-slate-200 p-4">
-        <h1 class="text-lg">Graph modules</h1>
-        <label class="flex flex-row items-center gap-2">
-          <p>Upload webpack stats.json:</p>
-          <input id="fileinput" type="file" />
-        </label>
-      </div>
-      <div class="flex-grow" id="container"></div>
-    </main>
+    <script type="module" src="./index.tsx"></script>
+    <div id="react-root" class="h-full"></div>
   </body>
 </html>

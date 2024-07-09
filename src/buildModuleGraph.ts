@@ -1,4 +1,4 @@
-import {StatsModule, StatsCompilation, StatsChunkGroup} from 'webpack';
+import type {StatsModule, StatsCompilation, StatsChunkGroup} from 'webpack';
 import {addEdge, getEntryKey, getModuleKey} from './util';
 
 export type EntryNode = {
@@ -27,8 +27,6 @@ export function buildModuleGraph(statsData: StatsCompilation): ModuleGraph {
 
   for (const mod of statsData.modules) {
     if (nodes.has(getModuleKey(mod))) {
-      console.error('Existing module:', nodes.get(getModuleKey(mod)));
-      console.error('Duplicate module:', mod);
       continue;
     }
     nodes.set(getModuleKey(mod), {type: 'module', stats: mod});
